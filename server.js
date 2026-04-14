@@ -25,27 +25,33 @@ const app = express();
 const server = http.createServer(app);
 
 
-// ✅ Allowed Origins (IMPORTANT)
-const allowedOrigins = [
-  'http://localhost:5173',
-  'local-gems-frontend-ifdf.vercel.app'
-];
-
-
-// ─── Socket.io Setup ─────────────────────────────────────────
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ['GET', 'POST'],
-    credentials: true,
+// ✅ UNIVERSAL CORS (BEST FOR VERCEL + LOCAL)
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (
+      !origin ||
+      origin.includes('vercel.app') ||   // ✅ allow all vercel
+      origin.includes('localhost')       // ✅ allow local
+    ) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
   },
+  credentials: true,
+};
+
+
+// ─── Socket.io Setup ─────────────────────────
+const io = new Server(server, {
+  cors: corsOptions,
 });
 
 initSocket(io);
 app.set('io', io);
 
 
-// ─── Rate Limiting ──────────────────────────────────────────
+// ─── Rate Limiting ──────────────────────────
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -59,22 +65,10 @@ const authLimiter = rateLimit({
 });
 
 
-// ─── Middleware ─────────────────────────────────────────────
+// ─── Middleware ─────────────────────────────
 app.use(helmet());
+app.use(cors(corsOptions)); // ✅ FIXED
 
-// ✅ FIXED CORS
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-}));
-
-// Stripe webhook (raw body)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -85,7 +79,7 @@ app.use(morgan('dev'));
 app.use('/api/', limiter);
 
 
-// ─── Routes ─────────────────────────────────────────────────
+// ─── Routes ─────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/talent', talentRoutes);
@@ -111,9 +105,10 @@ app.get('/api/fix-profiles', async (req, res) => {
       { profileStatus: { $in: ['pending', 'draft'] } },
       { profileStatus: 'approved' }
     );
+
     res.json({
       success: true,
-      message: `Approved ${result.modifiedCount} profiles`
+      message: `Approved ${result.modifiedCount} profiles`,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -121,18 +116,19 @@ app.get('/api/fix-profiles', async (req, res) => {
 });
 
 
-// ─── Error Handling ─────────────────────────────────────────
+// ─── Error Handling ─────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
 
-// ─── DB + Server Start ──────────────────────────────────────
+// ─── DB + Server Start ──────────────────────
 const PORT = process.env.PORT || 5000;
 
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB connected');
+
     server.listen(PORT, () =>
       console.log(`🚀 Server running on port ${PORT}`)
     );
