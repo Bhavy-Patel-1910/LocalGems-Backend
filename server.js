@@ -28,7 +28,7 @@ const server = http.createServer(app);
 // ✅ Allowed Origins (IMPORTANT)
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://local-gems-frontend.vercel.app'
+  'local-gems-frontend-ifdf.vercel.app'
 ];
 
 
