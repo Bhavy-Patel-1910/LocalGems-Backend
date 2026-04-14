@@ -26,25 +26,20 @@ const server = http.createServer(app);
 
 
 // ✅ UNIVERSAL CORS (BEST FOR VERCEL + LOCAL)
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (
-      !origin ||
-      origin.includes('vercel.app') ||   // ✅ allow all vercel
-      origin.includes('localhost')       // ✅ allow local
-    ) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+
+app.use(cors({
+  origin: true, // ✅ allow all origins automatically
   credentials: true,
-};
+}));
+
+app.options('*', cors()); // ✅ handle preflight
 
 
 // ─── Socket.io Setup ─────────────────────────
 const io = new Server(server, {
-  cors: corsOptions,
+  cors: {
+    origin: "*", // ✅ temporary
+  },
 });
 
 initSocket(io);
