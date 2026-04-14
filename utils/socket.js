@@ -4,34 +4,76 @@ const initSocket = (io) => {
   io.on('connection', (socket) => {
     console.log(`🔌 Socket connected: ${socket.id}`);
 
-    // User comes online
+    // 🔹 User comes online
     socket.on('user_online', (userId) => {
+      if (!userId) return;
+
+      socket.userId = userId; // ✅ attach userId to socket
+
       onlineUsers.set(userId, socket.id);
-      socket.join(userId); // join room = userId for direct messages
+
+      socket.join(userId); // private room for messages
+
       io.emit('online_users', Array.from(onlineUsers.keys()));
+
+      console.log(`🟢 User online: ${userId}`);
     });
 
-    // Typing indicator
+    // 🔹 Send message (optional real-time emit)
+    socket.on('send_message', ({ to, message }) => {
+      const receiverSocket = onlineUsers.get(to);
+
+      if (receiverSocket) {
+        io.to(receiverSocket).emit('receive_message', {
+          from: socket.userId,
+          message,
+        });
+      }
+    });
+
+    // 🔹 Typing indicator
     socket.on('typing', ({ to }) => {
       const receiverSocket = onlineUsers.get(to);
-      if (receiverSocket) io.to(receiverSocket).emit('typing', { from: socket.userId });
+
+      if (receiverSocket) {
+        io.to(receiverSocket).emit('typing', {
+          from: socket.userId,
+        });
+      }
     });
 
+    // 🔹 Stop typing
     socket.on('stop_typing', ({ to }) => {
       const receiverSocket = onlineUsers.get(to);
-      if (receiverSocket) io.to(receiverSocket).emit('stop_typing');
+
+      if (receiverSocket) {
+        io.to(receiverSocket).emit('stop_typing', {
+          from: socket.userId,
+        });
+      }
     });
 
+    // 🔹 Disconnect
     socket.on('disconnect', () => {
-      for (const [userId, sid] of onlineUsers.entries()) {
-        if (sid === socket.id) { onlineUsers.delete(userId); break; }
+      if (socket.userId) {
+        onlineUsers.delete(socket.userId);
+
+        io.emit('online_users', Array.from(onlineUsers.keys()));
+
+        console.log(`🔴 User offline: ${socket.userId}`);
       }
-      io.emit('online_users', Array.from(onlineUsers.keys()));
+
       console.log(`❌ Socket disconnected: ${socket.id}`);
     });
   });
 };
 
-const getOnlineUsers = () => Array.from(onlineUsers.keys());
+// 🔹 Helper: get online users
+const getOnlineUsers = () => {
+  return Array.from(onlineUsers.keys());
+};
 
-module.exports = { initSocket, getOnlineUsers };
+module.exports = {
+  initSocket,
+  getOnlineUsers,
+};
