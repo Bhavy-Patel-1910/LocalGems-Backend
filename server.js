@@ -24,44 +24,68 @@ const { initSocket } = require('./utils/socket');
 const app = express();
 const server = http.createServer(app);
 
-// ─── Socket.io Setup ───────────────────────────────────────────────────────────
+
+// ✅ Allowed Origins (IMPORTANT)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://local-gems-frontend.vercel.app'
+];
+
+
+// ─── Socket.io Setup ─────────────────────────────────────────
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173' || 'https://local-gems-frontend.vercel.app',
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true,
   },
 });
-initSocket(io);
-app.set('io', io); // Make io accessible in controllers via req.app.get('io')
 
-// ─── Rate Limiting ─────────────────────────────────────────────────────────────
+initSocket(io);
+app.set('io', io);
+
+
+// ─── Rate Limiting ──────────────────────────────────────────
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 100,
   message: 'Too many requests, please try again later.',
 });
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: 'Too many auth attempts.',
 });
 
-// ─── Middleware ────────────────────────────────────────────────────────────────
+
+// ─── Middleware ─────────────────────────────────────────────
 app.use(helmet());
+
+// ✅ FIXED CORS
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
-// Stripe webhooks need raw body
+
+// Stripe webhook (raw body)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(mongoSanitize());
 app.use(morgan('dev'));
+
 app.use('/api/', limiter);
 
-// ─── Routes ────────────────────────────────────────────────────────────────────
+
+// ─── Routes ─────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/talent', talentRoutes);
@@ -72,9 +96,14 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
-// One-time fix: approve all pending/draft profiles so existing talent shows up
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date() });
+});
+
+
+// Fix profiles (optional)
 app.get('/api/fix-profiles', async (req, res) => {
   try {
     const TalentProfile = require('./models/TalentProfile.model');
@@ -82,28 +111,36 @@ app.get('/api/fix-profiles', async (req, res) => {
       { profileStatus: { $in: ['pending', 'draft'] } },
       { profileStatus: 'approved' }
     );
-    res.json({ success: true, message: `Approved ${result.modifiedCount} profiles` });
+    res.json({
+      success: true,
+      message: `Approved ${result.modifiedCount} profiles`
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// ─── Error Handling ────────────────────────────────────────────────────────────
+
+// ─── Error Handling ─────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
-// ─── DB + Start ────────────────────────────────────────────────────────────────
+
+// ─── DB + Server Start ──────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB connected');
-    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    server.listen(PORT, () =>
+      console.log(`🚀 Server running on port ${PORT}`)
+    );
   })
   .catch((err) => {
     console.error('❌ MongoDB connection failed:', err.message);
     process.exit(1);
   });
+
 
 module.exports = { app, io };
