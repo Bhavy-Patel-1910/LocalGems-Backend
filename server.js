@@ -28,9 +28,11 @@ const server = http.createServer(app);
 // ✅ UNIVERSAL CORS (BEST FOR VERCEL + LOCAL)
 
 app.use(cors({
-  origin: true, // ✅ allow all origins automatically
+  origin: true,
   credentials: true,
 }));
+
+app.options('*', cors());
 
 
 // ─── Socket.io Setup ─────────────────────────
