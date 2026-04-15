@@ -32,8 +32,6 @@ app.use(cors({
   credentials: true,
 }));
 
-app.options('*', cors()); // ✅ handle preflight
-
 
 // ─── Socket.io Setup ─────────────────────────
 const io = new Server(server, {
