@@ -63,7 +63,6 @@ const authLimiter = rateLimit({
 
 // ─── Middleware ─────────────────────────────
 app.use(helmet());
-app.use(cors(corsOptions)); // ✅ FIXED
 
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
