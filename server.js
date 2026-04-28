@@ -27,6 +27,7 @@ const server = http.createServer(app);
 
 // ✅ UNIVERSAL CORS (BEST FOR VERCEL + LOCAL)
 
+// ✅ UNIVERSAL CORS
 app.use(cors({
   origin: true,
   credentials: true,
